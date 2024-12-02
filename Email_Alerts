@@ -5,9 +5,9 @@ class Config:
     MAIL_SERVER = 'smtp.gmail.com'
     MAIL_PORT = 587
     MAIL_USE_TLS = True
-    MAIL_USERNAME = 'your_email@example.com'
+    MAIL_USERNAME = 'waithirak.dorothy@gmail.com'
     MAIL_PASSWORD = 'your_password'
-    MAIL_DEFAULT_SENDER = 'your_email@example.com'
+    MAIL_DEFAULT_SENDER = 'waithirak.dorothy@gmail.com'
 
 // models
 
@@ -51,12 +51,12 @@ mail.init_app(app)
 def create_transaction():
     data = request.json
     if 'user_email' not in data:
-        return jsonify({'error': 'user_email is required'}), 400
+        return jsonify({'error': 'user_email is required'}), error 400
     
     transaction = Transaction(user_email=data['user_email'])
     db.session.add(transaction)
     db.session.commit()
-    return jsonify({'message': 'Transaction created', 'id': transaction.id}), 201
+    return jsonify({'message': 'Transaction created', 'id': transaction.id}), error 201
 
 @app.route('/transactions', methods=['GET'])
 def list_transactions():
@@ -97,7 +97,7 @@ import time
 BASE_URL = 'http://127.0.0.1:5000'
 
 # Create sample transactions
-sample_emails = ['user1@example.com', 'user2@example.com', 'user3@example.com']
+sample_emails = ['waithirak.dorothy@gmail.com', 'dorotttyyy@gmail.com', 'waithirak.kdorothy@gmail.com']
 
 for email in sample_emails:
     response = requests.post(f'{BASE_URL}/transaction', json={'user_email': email})
@@ -126,8 +126,7 @@ python simulate.py
 {'message': 'Transaction created', 'id': 3}
 All Transactions:
 [
-    {'id': 1, 'user_email': 'user1@example.com', 'status': 'delayed', 'timestamp': '2024-12-02T12:34:56'},
-    {'id': 2, 'user_email': 'user2@example.com', 'status': 'delayed', 'timestamp': '2024-12-02T12:34:56'},
-    {'id': 3, 'user_email': 'user3@example.com', 'status': 'delayed', 'timestamp': '2024-12-02T12:34:56'}
+    {'id': 1, 'user_email': 'waithirak.dorothy@gmail.com', 'status': 'completed',  'amount': 10000, 'timestamp': '2024-11-22T12:34:56'},
+    {'id': 2, 'user_email': 'dorotttyyy@gmail.com', 'status': 'failed, exceeds withdrawal amount', 'amount': 140000, 'timestamp': '2024-11-22T12:34:56'},
+    {'id': 3, 'user_email': 'waithirak.kdorothy@gmail.com', 'status': 'Try again later', 'timestamp': '2024-11-22T12:34:56'}
 ]
-
