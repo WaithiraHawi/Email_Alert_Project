@@ -1,0 +1,76 @@
+pip install Flask Flask-SQLAlchemy Flask-Mail
+class Config:
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///transactions.db'  # SQLite for simplicity
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    MAIL_SERVER = 'smtp.gmail.com'
+    MAIL_PORT = 587
+    MAIL_USE_TLS = True
+    MAIL_USERNAME = 'your_email@example.com'
+    MAIL_PASSWORD = 'your_email_password'
+    MAIL_DEFAULT_SENDER = 'your_email@example.com'
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+
+db = SQLAlchemy()
+
+class Transaction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_email = db.Column(db.String(120), nullable=False)
+    status = db.Column(db.String(20), default='pending')
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+from flask_mail import Mail, Message
+
+mail = Mail()
+
+def send_email(subject, recipients, body):
+    msg = Message(subject, recipients=recipients, body=body)
+    mail.send(msg)
+from flask import Flask, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_mail import Mail
+from config import Config
+from models import db, Transaction
+from email_service import send_email
+from datetime import datetime, timedelta
+import threading
+
+app = Flask(__name__)
+app.config.from_object(Config)
+
+db.init_app(app)
+mail = Mail(app)
+
+@app.route('/transaction', methods=['POST'])
+def create_transaction():
+    data = request.json
+    transaction = Transaction(user_email=data['user_email'])
+    db.session.add(transaction)
+    db.session.commit()
+    return jsonify({'message': 'Transaction created', 'id': transaction.id}), 201
+
+def monitor_transactions():
+    with app.app_context():
+        while True:
+            pending_transactions = Transaction.query.filter_by(status='pending').all()
+            for transaction in pending_transactions:
+                if datetime.utcnow() - transaction.timestamp > timedelta(seconds=45):
+                    send_email(
+                        subject="Transaction Delayed",
+                        recipients=[transaction.user_email],
+                        body="Your transaction has been delayed. Please contact support."
+                    )
+                    transaction.status = 'delayed'
+                    db.session.commit()
+            time.sleep(10)
+
+if __name__ == '__main__':
+    db.create_all()
+    threading.Thread(target=monitor_transactions, daemon=True).start()
+    app.run(debug=True)
+Flask
+Flask-SQLAlchemy
+Flask-Mail
+flask db init
+flask db migrate
+flask db upgrade
+python app.py
