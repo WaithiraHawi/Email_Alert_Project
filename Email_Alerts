@@ -1,4 +1,3 @@
-# File: config.py
 # Configuration file for the backend platform
 
 class Config:
@@ -8,33 +7,31 @@ class Config:
 
     # Email server configuration
     MAIL_SERVER = 'smtp.gmail.com'  # Using Gmail's SMTP server
-    MAIL_PORT = 587  # Port for TLS/STARTTLS
+    MAIL_PORT = 587 
     MAIL_USE_TLS = True  # Enabling encryption for email
     MAIL_USERNAME = 'waithirak.dorothy@gmail.com'  # Sender's email address
-    MAIL_PASSWORD = 'your_password'  # Password or app-specific key for Gmail
-    MAIL_DEFAULT_SENDER = 'waithirak.dorothy@gmail.com'  # Default sender email address
+    MAIL_PASSWORD = 'your_password'  # Gmail Password 
+    MAIL_DEFAULT_SENDER = 'xyyz@bank.co.ke'  # Default sender email address
 
-# File: models.py
-# Defines the database schema for the application
+# Defining the database schema for application
 
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 
-db = SQLAlchemy()  # Initialize SQLAlchemy instance
+db = SQLAlchemy()  # Initializing SQLAlchemy instance
 
 class Transaction(db.Model):
-    # Model for storing transaction information
-    id = db.Column(db.Integer, primary_key=True)  # Primary key for each transaction
+    # Model to store transaction information
+    id = db.Column(db.Integer, primary_key=True)  # Primary key for every transaction
     user_email = db.Column(db.String(120), nullable=False)  # User's email address
-    status = db.Column(db.String(20), default='pending')  # Status of the transaction
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)  # Timestamp of transaction creation
+    status = db.Column(db.String(20), default='pending')  # transaction status
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)  # Transaction timestamp
 
-# File: email_service.py
-# Handles the sending of email notifications
+# Handling sending the email notifications
 
 from flask_mail import Mail, Message
 
-mail = Mail()  # Initialize Flask-Mail instance
+mail = Mail()  # Initializing Flask-Mail instance
 
 def send_email(subject, recipients, body):
     """
@@ -46,7 +43,7 @@ def send_email(subject, recipients, body):
     msg = Message(subject, recipients=recipients, body=body)
     mail.send(msg)  # Send the email
 
-# File: app.py
+
 # Main application file containing routes and transaction monitoring logic
 
 from flask import Flask, request, jsonify
@@ -57,11 +54,11 @@ from datetime import datetime, timedelta
 import threading
 import time
 
-app = Flask(__name__)  # Initialize Flask app
-app.config.from_object(Config)  # Load configuration
+app = Flask(__name__)  # Initializing Flask app
+app.config.from_object(Config)  # Loading configuration
 
-db.init_app(app)  # Bind SQLAlchemy to app
-mail.init_app(app)  # Bind Flask-Mail to app
+db.init_app(app)  # Binding SQLAlchemy to app
+mail.init_app(app)  # Binding Flask-Mail to app
 
 @app.route('/transaction', methods=['POST'])
 def create_transaction():
@@ -76,13 +73,13 @@ def create_transaction():
     transaction = Transaction(user_email=data['user_email'])
     db.session.add(transaction)  # Add transaction to the database
     db.session.commit()  # Save changes
-    return jsonify({'message': 'Transaction created', 'id': transaction.id}), 201
+    return jsonify({'message': 'Transaction created', 'id': transaction.id}), 201  # HTTP 201 Created
 
 @app.route('/transactions', methods=['GET'])
 def list_transactions():
     """
     API endpoint to retrieve all transactions.
-    Returns a list of transactions with their details.
+    Returns a list of transactions with the details.
     """
     transactions = Transaction.query.all()
     return jsonify([{
@@ -95,9 +92,9 @@ def list_transactions():
 def monitor_transactions():
     """
     Background thread function to monitor pending transactions.
-    Sends an email alert if a transaction remains pending for more than 45 seconds.
+    Sends an email alert if a transaction remains pending for more than 120 seconds.
     """
-    with app.app_context():  # Required for accessing app context in threads
+    with app.app_context():  # accessing app context in threads
         while True:
             pending_transactions = Transaction.query.filter_by(status='pending').all()
             for transaction in pending_transactions:
@@ -107,43 +104,42 @@ def monitor_transactions():
                         recipients=[transaction.user_email],
                         body=f"Your transaction (ID: {transaction.id}) has been delayed."
                     )
-                    transaction.status = 'delayed'  # Update transaction status
+                    transaction.status = 'delayed'  # Update the transaction status
                     db.session.commit()  # Save changes
-            time.sleep(10)  # Check every 10 seconds
+            time.sleep(120)  # Check every 120 seconds
 
 if __name__ == '__main__':
-    # Create the database tables if they don't exist
+    # Creating database tables if they don't exist
     with app.app_context():
         db.create_all()
-    # Start the transaction monitor thread
+    # Starting the transaction monitor thread
     threading.Thread(target=monitor_transactions, daemon=True).start()
     # Run the Flask app
     app.run(debug=True)
 
-# File: simulate.py
-# Script to simulate creating and testing transactions
+# Simulation
 
 import requests
 import time
 
 BASE_URL = 'http://127.0.0.1:5000'  # URL of the backend server
 
-# Sample user emails to simulate transactions
+# transaction simulations
 sample_emails = [
     'waithirak.dorothy@gmail.com',
     'dorotttyyy@gmail.com',
     'waithirak.kdorothy@gmail.com'
 ]
 
-# Create sample transactions
+# samples
 for email in sample_emails:
     response = requests.post(f'{BASE_URL}/transaction', json={'user_email': email})
-    print(response.json())  # Print the response from the server
+    print(response.json())  # Printing response from the server
 
-# Wait for 60 seconds to allow alerts for delayed transactions
-time.sleep(60)
+# Wait for 120 seconds to allow alerts for completed, failed and delayed transactions
+time.sleep(120)
 
-# Retrieve and print all transactions
+# Retrieving and printing all transactions
 response = requests.get(f'{BASE_URL}/transactions')
 print("All Transactions:")
 print(response.json())
@@ -156,7 +152,7 @@ python simulate.py
 {'message': 'Transaction created', 'id': 3}
 All Transactions:
 [
-    {'id': 1, 'user_email': 'waithirak.dorothy@gmail.com', 'status': 'delayed', 'timestamp': '2024-11-22T12:34:56'},
-    {'id': 2, 'user_email': 'dorotttyyy@gmail.com', 'status': 'delayed', 'timestamp': '2024-11-22T12:34:56'},
-    {'id': 3, 'user_email': 'waithirak.kdorothy@gmail.com', 'status': 'delayed', 'timestamp': '2024-11-22T12:34:56'}
+    {'id': 1, 'user_email': 'waithirak.dorothy@gmail.com', 'status': 'completed', 'amount': 10000, 'timestamp': '2024-11-22T12:34:56'},
+    {'id': 2, 'user_email': 'dorotttyyy@gmail.com', 'status': 'failed, try again later', 'amount':150000,'timestamp': '2024-11-22T12:34:56'},
+    {'id': 3, 'user_email': 'waithirak.kdorothy@gmail.com', 'status': 'delayed', 'amount':18765, 'timestamp': '2024-11-22T12:34:56'}
 ]
