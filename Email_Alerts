@@ -1,131 +1,133 @@
-#Create Virtual Environment and Install Dependencies
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install Flask Flask-SQLAlchemy Flask-Migrate Flask-Mail
-
-# Application Configuration
-import os
-
+// file configuration
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'your-secret-key'
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///transactions.db'
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///transactions.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAIL_SERVER = 'smtp.gmail.com'
     MAIL_PORT = 587
     MAIL_USE_TLS = True
-    MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
-    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
-    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER')
+    MAIL_USERNAME = 'your_email@example.com'
+    MAIL_PASSWORD = 'your_password'
+    MAIL_DEFAULT_SENDER = 'your_email@example.com'
 
-# App Factory
+// models
 
-from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from flask_mail import Mail
-from config import Config
+from datetime import datetime
 
 db = SQLAlchemy()
-migrate = Migrate()
-mail = Mail()
-
-def create_app(config_class=Config):
-    app = Flask(__name__)
-    app.config.from_object(config_class)
-
-    db.init_app(app)
-    migrate.init_app(app, db)
-    mail.init_app(app)
-
-    from app import models, views
-    app.register_blueprint(views.bp)
-
-    return app
-
-# Database Models 
-
-from datetime import datetime
-from app import db
 
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_email = db.Column(db.String(120), nullable=False)
-    amount = db.Column(db.Float, nullable=False)
-    status = db.Column(db.String(20), default='pending')  # pending, completed, delayed
+    status = db.Column(db.String(20), default='pending')
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    processed_time = db.Column(db.DateTime)
 
-    def __repr__(self):
-        return f'<Transaction {self.id} - {self.status}>'
+// email_service.py
+from flask_mail import Mail, Message
 
-#Email Sending Logic
-from flask_mail import Message
-from app import mail
+mail = Mail()
 
-def send_alert_email(to, subject, body):
-    msg = Message(subject, recipients=[to])
-    msg.body = body
-    try:
-        mail.send(msg)
-        return True
-    except Exception as e:
-        print(f"Failed to send email: {e}")
-        return False
+def send_email(subject, recipients, body):
+    msg = Message(subject, recipients=recipients, body=body)
+    mail.send(msg)
 
-#Route Logic
-from flask import Blueprint, jsonify, request
+// app.py
+
+from flask import Flask, request, jsonify
+from config import Config
+from models import db, Transaction
+from email_service import mail, send_email
 from datetime import datetime, timedelta
-from app.models import Transaction, db
-from app.email_utils import send_alert_email
+import threading
+import time
 
-bp = Blueprint('main', __name__)
+app = Flask(__name__)
+app.config.from_object(Config)
 
-DELAY_THRESHOLD = timedelta(minutes=5)
+db.init_app(app)
+mail.init_app(app)
 
-@bp.route('/transaction', methods=['POST'])
+@app.route('/transaction', methods=['POST'])
 def create_transaction():
-    data = request.get_json()
-    new_transaction = Transaction(user_email=data['user_email'], amount=data['amount'])
-    db.session.add(new_transaction)
+    data = request.json
+    if 'user_email' not in data:
+        return jsonify({'error': 'user_email is required'}), 400
+    
+    transaction = Transaction(user_email=data['user_email'])
+    db.session.add(transaction)
     db.session.commit()
-    return jsonify({'message': 'Transaction created', 'transaction_id': new_transaction.id})
+    return jsonify({'message': 'Transaction created', 'id': transaction.id}), 201
 
-@bp.route('/process_transactions')
-def process_transactions():
-    # Simulate checking transaction delays and send alerts
-    transactions = Transaction.query.filter_by(status='pending').all()
-    for tx in transactions:
-        time_elapsed = datetime.utcnow() - tx.timestamp
-        if time_elapsed > DELAY_THRESHOLD:
-            tx.status = 'delayed'
-            tx.processed_time = datetime.utcnow()
-            db.session.commit()
+@app.route('/transactions', methods=['GET'])
+def list_transactions():
+    transactions = Transaction.query.all()
+    return jsonify([{
+        'id': t.id,
+        'user_email': t.user_email,
+        'status': t.status,
+        'timestamp': t.timestamp.isoformat()
+    } for t in transactions])
 
-            # Send email alert
-            email_sent = send_alert_email(
-                tx.user_email,
-                'Transaction Delay Alert',
-                f"Your transaction with ID {tx.id} has been delayed."
-            )
-            if email_sent:
-                print(f"Alert sent to {tx.user_email}")
-            else:
-                print(f"Failed to send alert for {tx.id}")
-
-    return jsonify({'message': 'Transactions processed'})
-
-#App Entry Point
-from app import create_app, db
-from app.models import Transaction
-
-app = create_app()
-
-@app.shell_context_processor
-def make_shell_context():
-    return {'db': db, 'Transaction': Transaction}
+def monitor_transactions():
+    with app.app_context():
+        while True:
+            pending_transactions = Transaction.query.filter_by(status='pending').all()
+            for transaction in pending_transactions:
+                if datetime.utcnow() - transaction.timestamp > timedelta(seconds=45):
+                    send_email(
+                        subject="Transaction Delayed",
+                        recipients=[transaction.user_email],
+                        body=f"Your transaction (ID: {transaction.id}) has been delayed."
+                    )
+                    transaction.status = 'delayed'
+                    db.session.commit()
+            time.sleep(10)
 
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    threading.Thread(target=monitor_transactions, daemon=True).start()
     app.run(debug=True)
+
+// simulation
+
+import requests
+import time
+
+BASE_URL = 'http://127.0.0.1:5000'
+
+# Create sample transactions
+sample_emails = ['user1@example.com', 'user2@example.com', 'user3@example.com']
+
+for email in sample_emails:
+    response = requests.post(f'{BASE_URL}/transaction', json={'user_email': email})
+    print(response.json())
+
+# Wait for 60 seconds to allow alerts for delayed transactions
+time.sleep(60)
+
+# List all transactions
+response = requests.get(f'{BASE_URL}/transactions')
+print("All Transactions:")
+print(response.json())
+
+// backend
+
+python app.py
+
+
+// simulation 
+python simulate.py
+
+// output
+
+{'message': 'Transaction created', 'id': 1}
+{'message': 'Transaction created', 'id': 2}
+{'message': 'Transaction created', 'id': 3}
+All Transactions:
+[
+    {'id': 1, 'user_email': 'user1@example.com', 'status': 'delayed', 'timestamp': '2024-12-02T12:34:56'},
+    {'id': 2, 'user_email': 'user2@example.com', 'status': 'delayed', 'timestamp': '2024-12-02T12:34:56'},
+    {'id': 3, 'user_email': 'user3@example.com', 'status': 'delayed', 'timestamp': '2024-12-02T12:34:56'}
+]
+
